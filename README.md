@@ -59,54 +59,57 @@ pip install -r requirements.txt
 
 ## ▶️ Running Tests
 
-### Option 1: Web UI (Interactive)
+### Quick Start (Automated)
+
+Run all test scenarios with a single command:
+
+```bash
+# Windows
+run_tests.bat
+
+# Linux/Mac
+./run_tests.sh
+```
+
+This executes:
+
+- ✅ Baseline (10 users, 60s)
+- ✅ Medium Load (50 users, 60s)
+- ✅ Stress Test (100 users, 60s)
+
+Reports generated in `reports/` folder.
+
+---
+
+### Manual Execution
+
+#### Baseline Test (10 users)
+
+```bash
+locust -f locustfile.py --headless -u 10 -r 2 -t 60s --html reports/baseline.html
+```
+
+#### Medium Load (50 users)
+
+```bash
+locust -f locustfile.py --headless -u 50 -r 5 -t 60s --html reports/medium.html
+```
+
+#### Stress Test (100 users)
+
+```bash
+locust -f locustfile.py --headless -u 100 -r 10 -t 60s --html reports/stress.html
+```
+
+---
+
+### Interactive Web UI
 
 ```bash
 locust -f locustfile.py
 ```
 
 Open: http://localhost:8089
-
-Configure:
-
-- Users: 10-100
-- Spawn rate: 1-10 users/sec
-- Duration: 60s-300s
-
----
-
-### Option 2: CLI (Headless)
-
-```bash
-# 10 users, 1 user/sec spawn, 60 seconds
-locust -f locustfile.py --headless -u 10 -r 1 -t 60s --html reports/report.html
-```
-
----
-
-### Option 3
-
-## 📊 Viewing Reports
-
-### After Running Tests
-
-```bash
-# Navigate to reports folder
-cd reports
-
-# Open report in browser
-start report.html  # Windows
-open report.html   # Mac
-xdg-open report.html  # Linux
-```
-
-The HTML report will open in your default browser showing:
-
-- ✅ Request statistics (RPS, response times, failures)
-- ✅ Charts (response time percentiles, requests per second)
-- ✅ Failure details (if any)
-
----
 
 ### Alternative: Python HTTP Server
 
@@ -120,26 +123,41 @@ python -m http.server 8000
 
 ⚠️ **Note:** Do NOT use Live Server (VSCode extension) - it won't render correctly.
 
-## 📊 Test Scenarios
+## 📊 Test Scenarios (Updated)
 
-| Endpoint   | Method | Weight | Purpose            |
-| ---------- | ------ | ------ | ------------------ |
-| `/posts`   | GET    | 3x     | Browse all posts   |
-| `/posts/1` | GET    | 2x     | View specific post |
-| `/posts`   | POST   | 1x     | Create new post    |
+| Endpoint             | Method | Weight | Purpose          | Expected Time |
+| -------------------- | ------ | ------ | ---------------- | ------------- |
+| `/posts`             | GET    | 3x     | Browse all posts | < 500ms       |
+| `/posts/1`           | GET    | 2x     | View single post | < 300ms       |
+| `/comments?postId=1` | GET    | 2x     | Read comments    | < 400ms       |
+| `/posts`             | POST   | 1x     | Create new post  | < 1000ms      |
+| `/posts/1`           | PUT    | 1x     | Update post      | < 800ms       |
 
-**Weight:** Higher weight = more frequent requests (realistic behavior)
+**Weight:** Higher weight = more frequent requests (realistic user behavior)
 
 ---
 
-## 📈 Example Results
+## 📈 Load Test Scenarios
 
-```
-Type    Name            # reqs  Avg (ms)  Min   Max   RPS
-GET     /posts          180     245       120   450   3.0
-GET     /posts/1        120     180       90    320   2.0
-POST    /posts          60      420       250   780   1.0
-```
+| Scenario     | Users | Spawn Rate | Duration | Purpose         |
+| ------------ | ----- | ---------- | -------- | --------------- |
+| **Baseline** | 10    | 2/sec      | 60s      | Normal load     |
+| **Medium**   | 50    | 5/sec      | 60s      | Moderate stress |
+| **Stress**   | 100   | 10/sec     | 60s      | High load       |
+
+See [RESULTS.md](RESULTS.md) for detailed performance analysis.
+
+## 📈 Load Test Scenarios
+
+| Scenario     | Users | Spawn Rate | Duration | Purpose         |
+| ------------ | ----- | ---------- | -------- | --------------- |
+| **Baseline** | 10    | 2/sec      | 60s      | Normal load     |
+| **Medium**   | 50    | 5/sec      | 60s      | Moderate stress |
+| **Stress**   | 100   | 10/sec     | 60s      | High load       |
+
+See [RESULTS.md](RESULTS.md) for detailed performance analysis.
+
+---
 
 **Key Metrics:**
 
