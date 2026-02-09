@@ -1,132 +1,238 @@
 """
 Performance Testing - JSONPlaceholder API
-Purpose: Load test REST API with multiple user load scenarios
-Author: Chande De Vargas
-Date: 2026-02-08
-
-Scenarios:
-    - Baseline: 10 users (normal load)
-    - Medium: 50 users (moderate stress)
-    - Stress: 100 users (high load)
+Advanced features: Custom metrics, SLA assertions, event hooks
+Author: Your Name
+Date: 2024-02-07
 """
-from locust import HttpUser, task, between
+from locust import HttpUser, task, between, events
+from locust.runners import MasterRunner
 import logging
+import time
+from config import (
+    API_BASE_URL, 
+    SLA_THRESHOLDS, 
+    ENABLE_ASSERTIONS,
+    ENABLE_DETAILED_LOGGING,
+    LOG_LEVEL,
+    LOG_FORMAT,
+    LOG_DATE_FORMAT
+)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format=LOG_FORMAT,
+    datefmt=LOG_DATE_FORMAT
+)
 logger = logging.getLogger(__name__)
+
+# Global metrics storage
+custom_metrics = {
+    "sla_violations": 0,
+    "slow_requests": []
+}
+
+
+# Event Hooks - Lifecycle Management
+@events.test_start.add_listener
+def on_test_start(environment, **kwargs):
+    """Called when test starts - setup phase"""
+    logger.info("=" * 60)
+    logger.info("PERFORMANCE TEST STARTED")
+    logger.info("=" * 60)
+    logger.info(f"Target: {API_BASE_URL}")
+    logger.info(f"SLA Assertions: {'ENABLED' if ENABLE_ASSERTIONS else 'DISABLED'}")
+    logger.info("=" * 60)
+
+
+@events.test_stop.add_listener
+def on_test_stop(environment, **kwargs):
+    """Called when test stops - cleanup phase"""
+    logger.info("=" * 60)
+    logger.info("PERFORMANCE TEST COMPLETED")
+    logger.info("=" * 60)
+    logger.info(f"Total SLA Violations: {custom_metrics['sla_violations']}")
+    
+    if custom_metrics['slow_requests']:
+        logger.warning(f"Slow Requests Detected: {len(custom_metrics['slow_requests'])}")
+        logger.warning("Top 5 slowest requests:")
+        for req in sorted(custom_metrics['slow_requests'], key=lambda x: x['time'], reverse=True)[:5]:
+            logger.warning(f"  - {req['method']} {req['name']}: {req['time']:.2f}ms")
+    
+    logger.info("=" * 60)
+
+
+@events.request.add_listener
+def on_request(request_type, name, response_time, response_length, exception, **kwargs):
+    """Called after each request - custom metrics tracking"""
+    
+    # Track slow requests (> 2 seconds)
+    if response_time > 2000:
+        custom_metrics['slow_requests'].append({
+            'method': request_type,
+            'name': name,
+            'time': response_time
+        })
+        if ENABLE_DETAILED_LOGGING:
+            logger.warning(f"SLOW REQUEST: {request_type} {name} took {response_time:.2f}ms")
+    
+    # SLA Validation
+    if ENABLE_ASSERTIONS and not exception:
+        sla_limit = None
+        
+        # Check if this endpoint has an SLA threshold
+        if request_type in SLA_THRESHOLDS:
+            for endpoint, limit in SLA_THRESHOLDS[request_type].items():
+                if endpoint in name:
+                    sla_limit = limit
+                    break
+        
+        # Validate against SLA
+        if sla_limit and response_time > sla_limit:
+            custom_metrics['sla_violations'] += 1
+            logger.error(
+                f"SLA VIOLATION: {request_type} {name} "
+                f"took {response_time:.2f}ms (limit: {sla_limit}ms)"
+            )
 
 
 class JSONPlaceholderUser(HttpUser):
     """
-    Simulates a user interacting with JSONPlaceholder API.
+    Advanced Locust user with SLA validation and custom metrics.
     
-    Behavior:
-    - Wait 1-3 seconds between requests (realistic user)
-    - Weighted tasks (some endpoints more frequent than others)
-    - Response validation with custom success/failure criteria
-    
-    Host: https://jsonplaceholder.typicode.com
+    Features:
+    - Response time assertions
+    - Detailed logging
+    - Custom metrics tracking
+    - Event hooks
     """
     wait_time = between(1, 3)
-    host = "https://jsonplaceholder.typicode.com"
+    host = API_BASE_URL
     
     def on_start(self):
-        """Called when a simulated user starts. Use for login/setup."""
-        logger.info(f"User {self.environment.runner.user_count} started")
+        """Called when a user starts"""
+        if ENABLE_DETAILED_LOGGING:
+            logger.info(f"User started (total active: {self.environment.runner.user_count})")
     
     
-    @task(3)  # Weight: 3x (most frequent)
+    def validate_response(self, response, endpoint, method, expected_status=200):
+        """
+        Centralized response validation with SLA checking.
+        
+        Args:
+            response: Response object
+            endpoint: Endpoint name (for SLA lookup)
+            method: HTTP method
+            expected_status: Expected status code
+            
+        Returns:
+            bool: True if validation passed
+        """
+        # Status code validation
+        if response.status_code != expected_status:
+            response.failure(f"Expected {expected_status}, got {response.status_code}")
+            return False
+        
+        # Response time SLA validation (already tracked in event hook)
+        # Just mark success here
+        response.success()
+        return True
+    
+    
+    @task(3)
     def get_all_posts(self):
         """
-        Test: GET /posts
-        Expected: 200 OK, response time < 500ms
-        Simulates: User browsing all posts (homepage)
-        Weight: 3x (most common action)
+        GET /posts - Browse all posts
+        SLA: < 500ms
         """
-        with self.client.get("/posts", catch_response=True) as response:
-            if response.status_code == 200:
-                # Validate response contains data
-                if response.json() and len(response.json()) > 0:
-                    response.success()
-                else:
-                    response.failure("Response is empty")
-            else:
-                response.failure(f"Got status code {response.status_code}")
+        endpoint = "/posts"
+        with self.client.get(endpoint, catch_response=True, name="GET /posts") as response:
+            if self.validate_response(response, endpoint, "GET"):
+                # Additional validation: check response structure
+                try:
+                    data = response.json()
+                    if not data or len(data) == 0:
+                        response.failure("Empty response")
+                        logger.error("GET /posts returned empty array")
+                except Exception as e:
+                    response.failure(f"Invalid JSON: {str(e)}")
     
     
-    @task(2)  # Weight: 2x
+    @task(2)
     def get_single_post(self):
         """
-        Test: GET /posts/1
-        Expected: 200 OK, response time < 300ms
-        Simulates: User viewing a specific post
-        Weight: 2x
+        GET /posts/1 - View specific post
+        SLA: < 300ms
         """
-        with self.client.get("/posts/1", catch_response=True) as response:
-            if response.status_code == 200:
-                data = response.json()
-                # Validate response structure
-                if "id" in data and "title" in data:
-                    response.success()
-                else:
-                    response.failure("Invalid response structure")
-            else:
-                response.failure(f"Got status code {response.status_code}")
+        endpoint = "/posts/1"
+        with self.client.get(endpoint, catch_response=True, name="GET /posts/1") as response:
+            if self.validate_response(response, endpoint, "GET"):
+                try:
+                    data = response.json()
+                    required_fields = ["id", "title", "body", "userId"]
+                    if not all(field in data for field in required_fields):
+                        response.failure("Missing required fields")
+                        logger.error(f"GET /posts/1 missing fields: {required_fields}")
+                except Exception as e:
+                    response.failure(f"Invalid JSON: {str(e)}")
     
     
-    @task(2)  # Weight: 2x
+    @task(2)
     def get_comments(self):
         """
-        Test: GET /comments?postId=1
-        Expected: 200 OK, response time < 400ms
-        Simulates: User reading comments on a post
-        Weight: 2x
+        GET /comments?postId=1 - Read comments
+        SLA: < 400ms
         """
-        with self.client.get("/comments?postId=1", catch_response=True) as response:
-            if response.status_code == 200:
-                comments = response.json()
-                if comments and len(comments) > 0:
-                    response.success()
-                else:
-                    response.failure("No comments returned")
-            else:
-                response.failure(f"Got status code {response.status_code}")
+        endpoint = "/comments"
+        with self.client.get(
+            f"{endpoint}?postId=1", 
+            catch_response=True, 
+            name="GET /comments"
+        ) as response:
+            if self.validate_response(response, endpoint, "GET"):
+                try:
+                    data = response.json()
+                    if not data or len(data) == 0:
+                        response.failure("No comments returned")
+                except Exception as e:
+                    response.failure(f"Invalid JSON: {str(e)}")
     
     
-    @task(1)  # Weight: 1x (less frequent)
+    @task(1)
     def create_post(self):
         """
-        Test: POST /posts
-        Expected: 201 Created, response time < 1000ms
-        Simulates: User creating a new post (less common)
-        Weight: 1x
+        POST /posts - Create new post
+        SLA: < 1000ms
         """
+        endpoint = "/posts"
         payload = {
             "title": "Performance Test Post",
             "body": "This is a test post created during load testing",
             "userId": 1
         }
         
-        with self.client.post("/posts", json=payload, catch_response=True) as response:
-            if response.status_code == 201:
-                data = response.json()
-                if "id" in data:
-                    response.success()
-                else:
-                    response.failure("Response missing ID")
-            else:
-                response.failure(f"Expected 201, got {response.status_code}")
+        with self.client.post(
+            endpoint, 
+            json=payload, 
+            catch_response=True,
+            name="POST /posts"
+        ) as response:
+            if self.validate_response(response, endpoint, "POST", expected_status=201):
+                try:
+                    data = response.json()
+                    if "id" not in data:
+                        response.failure("Response missing ID field")
+                except Exception as e:
+                    response.failure(f"Invalid JSON: {str(e)}")
     
     
-    @task(1)  # Weight: 1x
+    @task(1)
     def update_post(self):
         """
-        Test: PUT /posts/1
-        Expected: 200 OK, response time < 800ms
-        Simulates: User editing their post
-        Weight: 1x
+        PUT /posts/1 - Update existing post
+        SLA: < 800ms
         """
+        endpoint = "/posts/1"
         payload = {
             "id": 1,
             "title": "Updated Performance Test Post",
@@ -134,8 +240,10 @@ class JSONPlaceholderUser(HttpUser):
             "userId": 1
         }
         
-        with self.client.put("/posts/1", json=payload, catch_response=True) as response:
-            if response.status_code == 200:
-                response.success()
-            else:
-                response.failure(f"Expected 200, got {response.status_code}")
+        with self.client.put(
+            endpoint,
+            json=payload,
+            catch_response=True,
+            name="PUT /posts/1"
+        ) as response:
+            self.validate_response(response, endpoint, "PUT")

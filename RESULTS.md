@@ -194,3 +194,46 @@ POST/PUT requests consistently slower than GET:
 ---
 
 **Test Status:** ✅ **PASSED** - API performs well under tested load scenarios.
+
+---
+
+## ⚠️ Critical Findings (Day 3 - Advanced Metrics)
+
+### Breaking Point Identified
+
+**Response Time Explosion:**
+
+- 10 users: 123 ms avg
+- 50 users: 410 ms avg (+233%)
+- 100 users: 2,330 ms avg (+1,793%) 🔴
+
+**RPS Collapse:**
+
+- 10 users: 4.37 RPS
+- 50 users: 14.23 RPS (good)
+- 100 users: 6.48 RPS (WORSE than 50!) 🔴
+
+**Conclusion:** System hits **hard limit around 100 users** - RPS decreases despite more load.
+
+---
+
+### SLA Violations Summary
+
+| Scenario  | SLA Pass Rate | Status                      |
+| --------- | ------------- | --------------------------- |
+| 10 users  | 5/5 (100%)    | ✅ Production Ready         |
+| 50 users  | 3/5 (60%)     | ⚠️ Marginal                 |
+| 100 users | 0/5 (0%)      | 🔴 **NOT Production Ready** |
+
+See [METRICS.md](METRICS.md) for detailed SLA analysis.
+
+---
+
+### Recommendations Updated
+
+1. **🔴 CRITICAL:** Set max concurrent users to **50** in production
+2. **⚠️ HIGH:** Optimize POST/PUT endpoints (4.6s avg at 100 users)
+3. **📊 MEDIUM:** Implement caching and connection pooling
+4. **✅ LOW:** Add load balancer for horizontal scaling
+
+**Status:** System requires infrastructure improvements before handling > 50 users.
