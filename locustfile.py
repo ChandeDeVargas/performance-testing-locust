@@ -247,3 +247,84 @@ class JSONPlaceholderUser(HttpUser):
             name="PUT /posts/1"
         ) as response:
             self.validate_response(response, endpoint, "PUT")
+
+    @task(2)
+    def get_users(self):
+        """
+        GET /users - Browse all users
+        SLA: < 500ms
+        """
+        endpoint = "/users"
+        with self.client.get(endpoint, catch_response=True, name="GET /users") as response:
+            if self.validate_response(response, endpoint, "GET"):
+                try:
+                    data = response.json()
+                    if not data or len(data) == 0:
+                        response.failure("Empty users list")
+                    else:
+                        # Validate user structure
+                        if "id" not in data[0] or "email" not in data[0]:
+                            response.failure("Invalid user structure")
+                except Exception as e:
+                    response.failure(f"Invalid JSON: {str(e)}")
+    
+    
+    @task(1)
+    def get_user_detail(self):
+        """
+        GET /users/1 - View specific user
+        SLA: < 300ms
+        """
+        endpoint = "/users/1"
+        with self.client.get(endpoint, catch_response=True, name="GET /users/1") as response:
+            if self.validate_response(response, endpoint, "GET"):
+                try:
+                    data = response.json()
+                    required_fields = ["id", "name", "email", "address", "company"]
+                    if not all(field in data for field in required_fields):
+                        response.failure("Missing required user fields")
+                except Exception as e:
+                    response.failure(f"Invalid JSON: {str(e)}")
+    
+    
+    @task(1)
+    def get_albums(self):
+        """
+        GET /albums - Browse all albums
+        SLA: < 500ms
+        """
+        endpoint = "/albums"
+        with self.client.get(endpoint, catch_response=True, name="GET /albums") as response:
+            if self.validate_response(response, endpoint, "GET"):
+                try:
+                    data = response.json()
+                    if not data or len(data) == 0:
+                        response.failure("Empty albums list")
+                except Exception as e:
+                    response.failure(f"Invalid JSON: {str(e)}")
+    
+    
+    @task(1)
+    def get_user_posts(self):
+        """
+        GET /posts?userId=1 - Get posts by specific user
+        SLA: < 600ms
+        """
+        endpoint = "/posts?userId=1"
+        with self.client.get(
+            endpoint, 
+            catch_response=True, 
+            name="GET /posts?userId=1"
+        ) as response:
+            if self.validate_response(response, endpoint, "GET"):
+                try:
+                    data = response.json()
+                    if not data or len(data) == 0:
+                        response.failure("No posts for user")
+                    # Validate all posts belong to userId=1
+                    for post in data:
+                        if post.get("userId") != 1:
+                            response.failure("Posts contain wrong userId")
+                            break
+                except Exception as e:
+                    response.failure(f"Invalid JSON: {str(e)}")

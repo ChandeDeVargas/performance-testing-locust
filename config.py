@@ -12,6 +12,10 @@ SLA_THRESHOLDS = {
         "/posts": 500,              # Max 500ms for browsing posts
         "/posts/1": 300,            # Max 300ms for single post
         "/comments": 400,           # Max 400ms for comments
+        "/users": 500,              # Max 500ms for browsing users
+        "/users/1": 300,            # Max 300ms for single user
+        "/albums": 500,             # Max 500ms for browsing albums
+        "/posts?userId=1": 600,     # Max 600ms for filtered posts
     },
     "POST": {
         "/posts": 1000,             # Max 1000ms for creating post
@@ -20,7 +24,6 @@ SLA_THRESHOLDS = {
         "/posts/1": 800,            # Max 800ms for updating post
     }
 }
-
 # Performance Percentiles to Track
 PERCENTILES = [0.50, 0.75, 0.90, 0.95, 0.99]
 
