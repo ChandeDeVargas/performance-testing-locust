@@ -1,8 +1,12 @@
 # Performance Testing with Locust
 
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Locust](https://img.shields.io/badge/Locust-00B140?style=for-the-badge)
+![Locust](https://img.shields.io/badge/Locust-00B140?style=for-the-badge&logo=locust&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Complete-success?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-Passing-success?style=for-the-badge&logo=checkmarx)
+![Coverage](https://img.shields.io/badge/Endpoints-10-informational?style=for-the-badge)
+![Load](https://img.shields.io/badge/Max_Load-100_Users-orange?style=for-the-badge)
 
 > Advanced load testing framework with multi-endpoint coverage, SLA assertions, and interactive analytics dashboard
 
@@ -37,6 +41,61 @@ This project demonstrates **professional performance testing** using Locust to a
 **Critical Finding:** System degrades severely at 100 users but maintains zero failure rate (graceful degradation).
 
 📈 [View Full Analysis](ANALYSIS.md) | 📊 [Endpoint Comparison](reports/COMPARISON.md) | 🎨 [Interactive Dashboard](reports/dashboard.html)
+
+---
+
+---
+
+## 📸 Visual Overview
+
+### Interactive Dashboard
+
+![Performance Dashboard](docs/images/dashboard_full.png)
+
+**Features:**
+
+- Real-time performance metrics across 3 load levels
+- Interactive Chart.js visualizations
+- Color-coded severity indicators
+- Summary statistics cards
+
+---
+
+### Response Time Analysis
+
+![Response Time Chart](docs/images/chart_response_time.png)
+
+**Insights:**
+
+- Clear visualization of performance degradation
+- Endpoint-by-endpoint comparison
+- Load level correlation (10 → 50 → 100 users)
+
+---
+
+### Detailed Test Results
+
+![Locust Report](docs/images/locust_report.png)
+
+**Metrics Tracked:**
+
+- Request counts and failure rates
+- Response time statistics (Avg, Min, Max)
+- Requests per second (RPS)
+- Percentile distributions
+
+---
+
+### Automated Test Execution
+
+![Terminal Output](docs/images/terminal_running.png)
+
+**Automation Features:**
+
+- Auto-detect virtual environment
+- Sequential scenario execution
+- Real-time SLA validation
+- Timestamped report generation
 
 ---
 
