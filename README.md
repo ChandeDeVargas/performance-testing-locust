@@ -157,6 +157,16 @@ pip install -r requirements.txt
 
 ### Option 1: Automated Test Suite (Recommended)
 
+# Antes:
+
+run_tests.bat # Windows
+run_tests.sh # Linux/Mac
+
+# Ahora:
+
+tests/run_tests.bat # Windows
+tests/run_tests.sh # Linux/Mac
+
 Run all 3 load scenarios with a single command:
 
 ```bash

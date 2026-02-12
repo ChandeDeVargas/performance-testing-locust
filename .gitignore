@@ -23,3 +23,7 @@ Thumbs.db
 # Reports (optional: commit or ignore)
 reports/*.html
 reports/*.csv
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
