@@ -8,6 +8,7 @@ from locust import HttpUser, task, between, events
 from locust.runners import MasterRunner
 import logging
 import time
+import random
 from config import (
     API_BASE_URL, 
     SLA_THRESHOLDS, 
@@ -115,7 +116,7 @@ class JSONPlaceholderUser(HttpUser):
             logger.info(f"User started (total active: {self.environment.runner.user_count})")
     
     
-    def validate_response(self, response, endpoint, method, expected_status=200):
+    def validate_response(self, response, endpoint, method, expected_status=200, required_keys=None):
         """
         Centralized response validation with SLA checking.
         
@@ -124,6 +125,7 @@ class JSONPlaceholderUser(HttpUser):
             endpoint: Endpoint name (for SLA lookup)
             method: HTTP method
             expected_status: Expected status code
+            required_keys: List of keys expected in the JSON response
             
         Returns:
             bool: True if validation passed
@@ -132,9 +134,31 @@ class JSONPlaceholderUser(HttpUser):
         if response.status_code != expected_status:
             response.failure(f"Expected {expected_status}, got {response.status_code}")
             return False
-        
-        # Response time SLA validation (already tracked in event hook)
-        # Just mark success here
+            
+        if required_keys is not None:
+            try:
+                data = response.json()
+                if not data:
+                    response.failure("Empty or null JSON response")
+                    return False
+                    
+                if isinstance(data, list):
+                    if len(data) == 0:
+                        response.failure("Empty array response")
+                        return False
+                    item = data[0]
+                else:
+                    item = data
+                    
+                missing_keys = [k for k in required_keys if k not in item]
+                if missing_keys:
+                    response.failure(f"Missing required fields: {missing_keys}")
+                    return False
+            except Exception as e:
+                response.failure(f"Invalid JSON: {str(e)}")
+                return False
+
+        # Mark success here
         response.success()
         return True
     
@@ -147,55 +171,35 @@ class JSONPlaceholderUser(HttpUser):
         """
         endpoint = "/posts"
         with self.client.get(endpoint, catch_response=True, name="GET /posts") as response:
-            if self.validate_response(response, endpoint, "GET"):
-                # Additional validation: check response structure
-                try:
-                    data = response.json()
-                    if not data or len(data) == 0:
-                        response.failure("Empty response")
-                        logger.error("GET /posts returned empty array")
-                except Exception as e:
-                    response.failure(f"Invalid JSON: {str(e)}")
+            self.validate_response(response, endpoint, "GET", required_keys=["id", "title"])
     
     
     @task(2)
     def get_single_post(self):
         """
-        GET /posts/1 - View specific post
+        GET /posts/{id} - View specific post
         SLA: < 300ms
         """
-        endpoint = "/posts/1"
+        post_id = random.randint(1, 100)
+        endpoint = f"/posts/{post_id}"
         with self.client.get(endpoint, catch_response=True, name="GET /posts/1") as response:
-            if self.validate_response(response, endpoint, "GET"):
-                try:
-                    data = response.json()
-                    required_fields = ["id", "title", "body", "userId"]
-                    if not all(field in data for field in required_fields):
-                        response.failure("Missing required fields")
-                        logger.error(f"GET /posts/1 missing fields: {required_fields}")
-                except Exception as e:
-                    response.failure(f"Invalid JSON: {str(e)}")
+            self.validate_response(response, "/posts/1", "GET", required_keys=["id", "title", "body", "userId"])
     
     
     @task(2)
     def get_comments(self):
         """
-        GET /comments?postId=1 - Read comments
+        GET /comments?postId={id} - Read comments
         SLA: < 400ms
         """
+        post_id = random.randint(1, 100)
         endpoint = "/comments"
         with self.client.get(
-            f"{endpoint}?postId=1", 
+            f"{endpoint}?postId={post_id}", 
             catch_response=True, 
             name="GET /comments"
         ) as response:
-            if self.validate_response(response, endpoint, "GET"):
-                try:
-                    data = response.json()
-                    if not data or len(data) == 0:
-                        response.failure("No comments returned")
-                except Exception as e:
-                    response.failure(f"Invalid JSON: {str(e)}")
+            self.validate_response(response, endpoint, "GET", required_keys=["id", "postId", "name", "email", "body"])
     
     
     @task(1)
@@ -205,10 +209,11 @@ class JSONPlaceholderUser(HttpUser):
         SLA: < 1000ms
         """
         endpoint = "/posts"
+        user_id = random.randint(1, 10)
         payload = {
             "title": "Performance Test Post",
             "body": "This is a test post created during load testing",
-            "userId": 1
+            "userId": user_id
         }
         
         with self.client.post(
@@ -217,27 +222,22 @@ class JSONPlaceholderUser(HttpUser):
             catch_response=True,
             name="POST /posts"
         ) as response:
-            if self.validate_response(response, endpoint, "POST", expected_status=201):
-                try:
-                    data = response.json()
-                    if "id" not in data:
-                        response.failure("Response missing ID field")
-                except Exception as e:
-                    response.failure(f"Invalid JSON: {str(e)}")
+            self.validate_response(response, endpoint, "POST", expected_status=201, required_keys=["id"])
     
     
     @task(1)
     def update_post(self):
         """
-        PUT /posts/1 - Update existing post
+        PUT /posts/{id} - Update existing post
         SLA: < 800ms
         """
-        endpoint = "/posts/1"
+        post_id = random.randint(1, 100)
+        endpoint = f"/posts/{post_id}"
         payload = {
-            "id": 1,
+            "id": post_id,
             "title": "Updated Performance Test Post",
             "body": "This post was updated during load testing",
-            "userId": 1
+            "userId": random.randint(1, 10)
         }
         
         with self.client.put(
@@ -246,7 +246,7 @@ class JSONPlaceholderUser(HttpUser):
             catch_response=True,
             name="PUT /posts/1"
         ) as response:
-            self.validate_response(response, endpoint, "PUT")
+            self.validate_response(response, "/posts/1", "PUT", required_keys=["id"])
 
     @task(2)
     def get_users(self):
@@ -256,35 +256,19 @@ class JSONPlaceholderUser(HttpUser):
         """
         endpoint = "/users"
         with self.client.get(endpoint, catch_response=True, name="GET /users") as response:
-            if self.validate_response(response, endpoint, "GET"):
-                try:
-                    data = response.json()
-                    if not data or len(data) == 0:
-                        response.failure("Empty users list")
-                    else:
-                        # Validate user structure
-                        if "id" not in data[0] or "email" not in data[0]:
-                            response.failure("Invalid user structure")
-                except Exception as e:
-                    response.failure(f"Invalid JSON: {str(e)}")
+            self.validate_response(response, endpoint, "GET", required_keys=["id", "email"])
     
     
     @task(1)
     def get_user_detail(self):
         """
-        GET /users/1 - View specific user
+        GET /users/{id} - View specific user
         SLA: < 300ms
         """
-        endpoint = "/users/1"
+        user_id = random.randint(1, 10)
+        endpoint = f"/users/{user_id}"
         with self.client.get(endpoint, catch_response=True, name="GET /users/1") as response:
-            if self.validate_response(response, endpoint, "GET"):
-                try:
-                    data = response.json()
-                    required_fields = ["id", "name", "email", "address", "company"]
-                    if not all(field in data for field in required_fields):
-                        response.failure("Missing required user fields")
-                except Exception as e:
-                    response.failure(f"Invalid JSON: {str(e)}")
+            self.validate_response(response, "/users/1", "GET", required_keys=["id", "name", "email", "address", "company"])
     
     
     @task(1)
@@ -295,36 +279,29 @@ class JSONPlaceholderUser(HttpUser):
         """
         endpoint = "/albums"
         with self.client.get(endpoint, catch_response=True, name="GET /albums") as response:
-            if self.validate_response(response, endpoint, "GET"):
-                try:
-                    data = response.json()
-                    if not data or len(data) == 0:
-                        response.failure("Empty albums list")
-                except Exception as e:
-                    response.failure(f"Invalid JSON: {str(e)}")
+            self.validate_response(response, endpoint, "GET", required_keys=["id", "userId"])
     
     
     @task(1)
     def get_user_posts(self):
         """
-        GET /posts?userId=1 - Get posts by specific user
+        GET /posts?userId={id} - Get posts by specific user
         SLA: < 600ms
         """
-        endpoint = "/posts?userId=1"
+        user_id = random.randint(1, 10)
+        endpoint = f"/posts?userId={user_id}"
         with self.client.get(
             endpoint, 
             catch_response=True, 
             name="GET /posts?userId=1"
         ) as response:
-            if self.validate_response(response, endpoint, "GET"):
+            if self.validate_response(response, "/posts?userId=1", "GET", required_keys=["id", "userId", "title"]):
+                # Validate all posts belong to user_id (not hardcoded 1)
                 try:
                     data = response.json()
-                    if not data or len(data) == 0:
-                        response.failure("No posts for user")
-                    # Validate all posts belong to userId=1
                     for post in data:
-                        if post.get("userId") != 1:
-                            response.failure("Posts contain wrong userId")
+                        if post.get("userId") != user_id:
+                            response.failure(f"Posts contain wrong userId (expected {user_id})")
                             break
-                except Exception as e:
-                    response.failure(f"Invalid JSON: {str(e)}")
+                except Exception:
+                    pass  # JSON already validated in validate_response
