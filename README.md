@@ -157,35 +157,34 @@ pip install -r requirements.txt
 
 ### Option 1: Automated Test Suite (Recommended)
 
-# Antes:
-
-run_tests.bat # Windows
-run_tests.sh # Linux/Mac
-
-# Ahora:
-
-tests/run_tests.bat # Windows
-tests/run_tests.sh # Linux/Mac
-
-Run all 3 load scenarios with a single command:
+Run all configured load scenarios with a single command from the project root:
 
 ```bash
 # Windows
-run_tests.bat
+tests\run_tests.bat
 
 # Linux/Mac
-./run_tests.sh
+./tests/run_tests.sh
 ```
+
+Alternatively, you can run the cross-platform Python runner directly:
+
+```bash
+python tests/run_tests.py
+```
+
+> [!TIP]
+> Remember that the configurations for the different load scenarios (like users, spawn rate, and duration) are now modified directly from the `config.py` file. You no longer need to manually edit the `.bat` or `.sh` scripts to change the simulation parameters.
 
 **What it does:**
 
 - ✅ Auto-detects virtual environment (no manual activation needed)
-- ✅ Executes 3 scenarios: 10, 50, 100 concurrent users
+- ✅ Executes scenarios sequentially as configured in `config.py`
 - ✅ Generates timestamped HTML and CSV reports
 - ✅ Validates SLA compliance in real-time
 - ✅ Logs slow requests and violations
 
-**Duration:** ~3-4 minutes total (60s per scenario + processing)
+**Duration:** Variable based on `config.py` configuration.
 
 ---
 
@@ -512,6 +511,7 @@ Open: `http://localhost:8000/dashboard.html`
 
 ```txt
 locust==2.32.4
+python-dotenv==1.0.1
 ```
 
 **Additional Requirements:**
